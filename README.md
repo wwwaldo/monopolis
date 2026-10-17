@@ -2,6 +2,8 @@
 
 A browser-based economics simulator for a 1,024-parcel Monopoly-themed town. Residential and commercial mortgages, three industries with their own boom-bust cycles, a central bank, and one bank whose health feeds back into credit, all rendered as a 3D city you can orbit and inspect.
 
+**Play it:** https://wwwaldo.github.io/monopolis/
+
 Everything lives in a single file, `index.html`. It needs no build step and no dependencies beyond two CDN scripts (three.js r128 and its OrbitControls).
 
 ## Run it
