@@ -1,0 +1,861 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monopolis Economy Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a three-pane game board — policy levers left, the 3D town centre, the ledger (KPIs, charts, news) right. Stacks on narrow screens. */
+:root{
+  --bg:#d9e9d8; --panel:#f3f8f1; --panel2:#e6f0e3; --ink:#15221a; --muted:#566a5c; --line:#b9d0bc;
+  --accent:#c4202e; --accent-ink:#ffffff;
+  --good:#2b8a3e; --warn:#b97f00; --bad:#c4202e; --shade:rgba(21,34,26,.07);
+  --scene:#cfe2ce; --ground:#a8bfab; --road:#78857c; --sea:#5d9fc4; --sand:#e2d3a6;
+  --f-display:'Alfa Slab One', Rockwell, Georgia, serif;
+  --f-body:'Archivo', system-ui, -apple-system, sans-serif;
+  --f-data:'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e1913; --panel:#13221a; --panel2:#182a20; --ink:#e3eee5; --muted:#8ea596; --line:#264034;
+  --accent:#ff5a63; --accent-ink:#1a0507;
+  --good:#5cc274; --warn:#e8b33a; --bad:#ff5a63; --shade:rgba(227,238,229,.06);
+  --scene:#0f1c15; --ground:#1d2c24; --road:#2c3a32; --sea:#1f4a66; --sand:#5b5236;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0e1913; --panel:#13221a; --panel2:#182a20; --ink:#e3eee5; --muted:#8ea596; --line:#264034;
+  --accent:#ff5a63; --accent-ink:#1a0507;
+  --good:#5cc274; --warn:#e8b33a; --bad:#ff5a63; --shade:rgba(227,238,229,.06);
+  --scene:#0f1c15; --ground:#1d2c24; --road:#2c3a32; --sea:#1f4a66; --sand:#5b5236;
+  color-scheme:dark; }
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:13px;overflow:hidden}
+#app{height:100%;display:grid;grid-template-columns:300px minmax(0,1fr) 370px;grid-template-rows:auto minmax(0,1fr)}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 16px;border-bottom:2px solid var(--ink);background:var(--panel)}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0;letter-spacing:.02em;color:var(--accent);text-transform:uppercase}
+.brand small{color:var(--muted);font-size:12px}
+.ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button{font:600 12px var(--f-body);color:var(--ink);background:var(--panel2);border:1.5px solid var(--ink);border-radius:4px;padding:6px 10px;cursor:pointer}
+button:hover{background:var(--line)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);min-width:74px}
+.clock{font:600 13px var(--f-data);font-variant-numeric:tabular-nums;min-width:86px}
+.pill{font:700 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1.5px solid currentColor}
+.pill.boom{color:var(--good)} .pill.expansion{color:var(--good)} .pill.slowdown{color:var(--warn)} .pill.recession{color:var(--bad)} .pill.recovery{color:var(--muted)}
+label.inline{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+input[type=range]{accent-color:var(--accent)}
+input[type=number],select{font:500 12px var(--f-data);background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:4px;padding:4px 6px}
+input[type=number]{width:70px}
+
+aside#levers{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:10px 12px 40px}
+.grp{border-bottom:1px solid var(--line);padding:6px 0}
+.grp summary{cursor:pointer;font:700 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;padding:6px 0;display:flex;align-items:center;gap:8px;list-style:none}
+.grp summary::-webkit-details-marker{display:none}
+.grp summary::before{content:'▸';color:var(--muted);transition:transform .15s}
+.grp[open] summary::before{transform:rotate(90deg)}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:4px 0 6px}
+.row label{font-size:12px;color:var(--ink)}
+.row output{font:600 11px var(--f-data);color:var(--muted);font-variant-numeric:tabular-nums}
+.row input{grid-column:1/-1;width:100%;margin:0}
+.toggle{display:flex;align-items:center;gap:8px;padding:4px 0 8px;font-size:12px}
+.shocks{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 0 8px}
+.shocks button{font-size:11px;padding:6px 6px;text-align:left}
+.note{color:var(--muted);font-size:11px;line-height:1.45;margin:4px 0 8px}
+
+main#map{position:relative;min-width:0;background:var(--scene)}
+#scene{display:block;width:100%;height:100%}
+.overlay{position:absolute;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:6px;padding:8px 10px;backdrop-filter:blur(6px)}
+#modebox{top:12px;left:12px;display:flex;gap:8px;align-items:center}
+#modebox span{font:700 10px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+#legend{left:12px;bottom:12px;display:flex;flex-direction:column;gap:3px;font-size:11px;max-width:220px}
+#legend .lg{display:flex;align-items:center;gap:6px}
+#legend .grad{height:8px;border-radius:2px;width:160px}
+#legend .gl{display:flex;justify-content:space-between;width:160px;color:var(--muted);font:10px var(--f-data)}
+#hint{right:12px;bottom:12px;color:var(--muted);font-size:11px}
+#tip{position:absolute;pointer-events:none;min-width:230px;max-width:280px;background:var(--panel);border:2px solid var(--ink);border-radius:6px;padding:0;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5}
+#tip .band{padding:8px 10px 6px;color:#fff;font:400 13px var(--f-display);letter-spacing:.03em;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+#tip .band small{display:block;font:500 10px var(--f-body);letter-spacing:.08em;opacity:.9;text-shadow:none}
+#tip dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;padding:8px 10px 10px}
+#tip dt{color:var(--muted)} #tip dd{margin:0;text-align:right;font:500 11.5px var(--f-data);font-variant-numeric:tabular-nums}
+#tip .st{display:inline-block;padding:1px 6px;border-radius:3px;color:#fff;font:700 10px var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+#tip .pinned{padding:0 10px 8px;color:var(--muted);font-size:10px}
+
+section#ledger{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:12px 14px 30px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.h2{font:700 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+#kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.kpi{background:var(--panel2);border-radius:5px;padding:7px 9px;border-left:4px solid var(--line)}
+.kpi.good{border-left-color:var(--good)} .kpi.warn{border-left-color:var(--warn)} .kpi.bad{border-left-color:var(--bad)}
+.kpi .k{font-size:11px;color:var(--muted)}
+.kpi .v{font:600 17px var(--f-data);font-variant-numeric:tabular-nums}
+.chart{display:flex;flex-direction:column;gap:3px}
+.chart .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.chart .t{font-weight:700;font-size:12px}
+.chart .leg{display:flex;gap:8px;flex-wrap:wrap;font-size:10.5px;color:var(--muted)}
+.chart .leg i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:3px;vertical-align:middle}
+.chart canvas{width:100%;height:96px;display:block}
+#news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;max-height:260px;overflow-y:auto}
+#news li{display:grid;grid-template-columns:62px 1fr;gap:6px;font-size:12px;line-height:1.35}
+#news time{font:500 10.5px var(--f-data);color:var(--muted);padding-top:1px}
+#news li.bad span{color:var(--bad)} #news li.good span{color:var(--good)}
+
+@media (max-width:1100px){ #app{grid-template-columns:260px minmax(0,1fr) 320px} }
+@media (max-width:900px){
+  body{overflow:auto}
+  #app{display:block;height:auto}
+  header{position:sticky;top:env(safe-area-inset-top,0px);z-index:10}
+  main#map{height:62vh}
+  aside#levers,section#ledger{border:0;overflow:visible}
+  #hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){ .grp summary::before{transition:none} }
+</style>
+
+<div id="app">
+  <header>
+    <div class="brand"><h1>Monopolis</h1><small>1,024 parcels · 3 industries · one bank</small></div>
+    <div class="ctl">
+      <button id="play" class="primary">Pause</button>
+      <button id="step" title="Advance one month">+1 mo</button>
+      <label class="inline" for="speed">Speed <input id="speed" type="range" min="0.5" max="36" step="0.5" value="6"></label>
+      <span class="clock" id="clock">Jan 2000</span>
+      <span class="pill expansion" id="phase">Expansion</span>
+    </div>
+    <div class="ctl">
+      <label class="inline" for="seed">Seed <input id="seed" type="number" value="1024"></label>
+      <button id="reseed" title="New random seed and restart">Shuffle</button>
+      <button id="reset">Restart</button>
+    </div>
+  </header>
+
+  <aside id="levers" aria-label="Simulation variables"></aside>
+
+  <main id="map">
+    <canvas id="scene"></canvas>
+    <div class="overlay" id="modebox"><span>Colour by</span>
+      <select id="mode" aria-label="Colour buildings by">
+        <option value="type">Property type</option>
+        <option value="status">Mortgage status</option>
+        <option value="ltv">Loan-to-value</option>
+        <option value="chg">Value change, 12 mo</option>
+        <option value="hood">Neighbourhood</option>
+        <option value="ind">Industry</option>
+      </select>
+    </div>
+    <div class="overlay" id="legend"></div>
+    <div class="overlay" id="hint">Drag to orbit · right-drag to pan · scroll to zoom · click a building to pin it</div>
+    <div id="tip" hidden></div>
+  </main>
+
+  <section id="ledger" aria-label="Economy readout">
+    <div><p class="h2">This month</p><div id="kpis"></div></div>
+    <div id="charts"></div>
+    <div><p class="h2">Town news</p><ol id="news"></ol></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+/* ============================== helpers ============================== */
+const $=s=>document.querySelector(s);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+let rng=Math.random;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const R=()=>rng();
+function gauss(){let u=0;while(!u)u=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R())}
+function annuity(P,ratePct,n){const r=ratePct/1200;if(n<=0)return P;if(r<=1e-9)return P/n;return P*r/(1-Math.pow(1+r,-n))}
+function pvAnnuity(pmt,ratePct,n){const r=ratePct/1200;if(r<=1e-9)return pmt*n;return pmt*(1-Math.pow(1+r,-n))/r}
+function pick(w){let s=0;for(const k in w)s+=w[k];let x=R()*s;for(const k in w){x-=w[k];if(x<=0)return k}return Object.keys(w)[0]}
+const money=k=>k>=1000?'$'+(k/1000).toFixed(k>=10000?1:2)+'M':'$'+Math.round(k)+'k';
+const pct=(v,d=1)=>(v>=0?'':'−')+Math.abs(v).toFixed(d)+'%';
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dateOf=t=>MONTHS[t%12]+' '+(2000+Math.floor(t/12));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ============================== world definitions ============================== */
+const IND=[{name:'Manufacturing',color:'#e8833a'},{name:'Tech',color:'#3d8be0'},{name:'Tourism & Retail',color:'#c9a227'}];
+const TYPES={
+  lot:{label:'Vacant lot',cls:'lot',h:0.05,fp:[0.9,0.9],base:120,color:'#b49f72'},
+  house:{label:'House',cls:'res',h:0.55,fp:[0.55,0.55],base:520,color:'#2f9e44',roof:true},
+  apartment:{label:'Apartment block',cls:'res',h:2.4,fp:[0.8,0.8],base:3200,color:'#cdb995'},
+  hotel:{label:'Hotel',cls:'com',ind:2,h:3.4,fp:[0.82,0.6],base:9000,color:'#d6283a'},
+  retail:{label:'Shops',cls:'com',ind:2,h:0.8,fp:[0.86,0.74],base:1600,color:'#e9a23b'},
+  office:{label:'Office tower',cls:'com',ind:1,h:5.5,fp:[0.7,0.7],base:14000,color:'#6f9fc4'},
+  factory:{label:'Factory',cls:'com',ind:0,h:1.3,fp:[0.92,0.8],base:6000,color:'#8a7b6e'},
+  warehouse:{label:'Warehouse',cls:'com',ind:0,h:0.8,fp:[0.92,0.62],base:2800,color:'#aaa293'},
+};
+const RES_MIX=(h,a,r,l)=>({house:h,apartment:a,retail:r,lot:l});
+const HOODS={
+  brown:{name:'Baltic Flats',color:'#8b5a3c',tier:.55,beta:1.25,streets:['Mediterranean Ave','Baltic Ave'],mix:RES_MIX(.72,.14,.04,.10)},
+  lightblue:{name:'Oriental Heights',color:'#7cc3e6',tier:.7,beta:1.15,streets:['Oriental Ave','Vermont Ave','Connecticut Ave'],mix:RES_MIX(.72,.15,.05,.08)},
+  pink:{name:'St. Charles',color:'#d63c96',tier:.85,beta:1.08,streets:['St. Charles Pl','States Ave','Virginia Ave'],mix:RES_MIX(.68,.18,.06,.08)},
+  orange:{name:'Tennessee Row',color:'#f08c1e',tier:1,beta:1,streets:['St. James Pl','Tennessee Ave','New York Ave'],mix:RES_MIX(.66,.19,.07,.08)},
+  red:{name:'Illinois Park',color:'#e0262b',tier:1.15,beta:.95,streets:['Kentucky Ave','Indiana Ave','Illinois Ave'],mix:RES_MIX(.6,.25,.08,.07)},
+  yellow:{name:'Marvin Gardens',color:'#e8c90f',tier:1.35,beta:.9,streets:['Atlantic Ave','Ventnor Ave','Marvin Gardens'],mix:RES_MIX(.75,.12,.06,.07)},
+  green:{name:'Downtown',color:'#1fa547',tier:1.6,beta:.9,streets:['Pacific Ave','North Carolina Ave','Pennsylvania Ave'],mix:{office:.5,retail:.24,apartment:.15,hotel:.05,lot:.06}},
+  darkblue:{name:'Boardwalk',color:'#1e4fa8',tier:1.9,beta:1,streets:['Park Place','Boardwalk'],mix:{hotel:.3,apartment:.25,retail:.22,house:.15,lot:.08}},
+  rail:{name:'Railroad Yards',color:'#555b58',tier:.8,beta:1,streets:['Reading Railroad','B&O Railroad','Short Line','Pennsylvania RR'],mix:{factory:.48,warehouse:.4,lot:.12}},
+};
+const RING=['brown','lightblue','pink','orange','red','yellow'];
+function hoodOf(bx,by){
+  if(by===7)return'darkblue';
+  if(bx>=6&&by<=3)return'rail';
+  if(bx>=3&&bx<=4&&by>=2&&by<=4)return'green';
+  const d=Math.hypot(bx-3.5,by-3.2);
+  const s=6-1.1*d+(by>=5?1.2:0)-(bx>=5&&by<=4?1.4:0);
+  return RING[clamp(Math.floor(s),0,5)];
+}
+
+/* ============================== variables (sliders) ============================== */
+const x2=v=>v.toFixed(2)+'×', p1=v=>v.toFixed(1)+'%', p2=v=>v.toFixed(2)+'%', py=v=>v.toFixed(1)+'%/yr', yr=v=>v+' yr', pc=v=>Math.round(v)+'%';
+const GROUPS=[
+  {name:'Macro cycle',open:true,items:[
+    ['cycleYears','Business-cycle length',3,15,.5,8,yr],
+    ['volatility','Shock volatility',0,3,.05,1.3,x2],
+    ['persistence','Cycle persistence',.9,.995,.001,.975,v=>v.toFixed(3)],
+    ['popGrowth','Population growth',-1,5,.1,1,py],
+    ['natU','Natural unemployment',2,10,.1,5,p1]]},
+  {name:'Central bank',open:true,toggle:['autoPolicy','Taylor-rule autopilot',true],items:[
+    ['policyRate','Policy rate (when manual)',0,15,.05,3.5,p2],
+    ['rNeutral','Neutral real rate',0,5,.1,1.5,p1],
+    ['inflTarget','Inflation target',0,6,.1,2,p1],
+    ['hawkish','Policy aggressiveness',0,3,.05,1,x2]]},
+  {name:'Manufacturing',ind:0,items:[
+    ['share0','Employment share',0,100,1,40,pc],['growth0','Trend growth',-3,6,.1,1.2,py],
+    ['rateSens0','Interest-rate sensitivity',0,3,.05,1.4,x2],['vol0','Own volatility',0,3,.05,.9,x2]]},
+  {name:'Tech',ind:1,items:[
+    ['share1','Employment share',0,100,1,30,pc],['growth1','Trend growth',-3,8,.1,3.5,py],
+    ['rateSens1','Interest-rate sensitivity',0,3,.05,.9,x2],['vol1','Own volatility',0,3,.05,2,x2]]},
+  {name:'Tourism & Retail',ind:2,items:[
+    ['share2','Employment share',0,100,1,30,pc],['growth2','Trend growth',-3,6,.1,1.5,py],
+    ['rateSens2','Interest-rate sensitivity',0,3,.05,.6,x2],['vol2','Own volatility',0,3,.05,1,x2],
+    ['wealth2','Housing wealth effect',0,3,.05,1,x2]]},
+  {name:'Residential mortgages',open:true,items:[
+    ['resSpread','Spread over policy rate',.5,5,.05,1.8,p2],
+    ['maxLTV','Max loan-to-value',50,100,1,80,pc],
+    ['maxDTI','Max payment / income',20,60,1,39,pc],
+    ['amortYears','Amortization',15,40,1,25,yr],
+    ['varShare','Share taking variable rate',0,100,1,35,pc],
+    ['fixedTerm','Fixed-rate term before renewal',1,10,1,5,yr]]},
+  {name:'Commercial mortgages',open:true,items:[
+    ['comSpread','Spread over policy rate',1,6,.05,2.4,p2],
+    ['maxLTVc','Max loan-to-value',40,90,1,65,pc],
+    ['minDSCR','Min debt-service coverage',1,2,.01,1.25,x2],
+    ['termC','Loan term (balloon)',3,15,1,10,yr]]},
+  {name:'Property market',items:[
+    ['speculation','Speculation (trend-chasing)',0,3,.05,1.5,x2],
+    ['turnover','Annual turnover',1,20,.5,7,p1],
+    ['propTax','Property tax',.2,3,.05,1,p2],
+    ['fireSale','Foreclosure fire-sale discount',0,50,1,25,pc],
+    ['contagion','Foreclosure contagion',0,3,.05,1,x2],
+    ['buildRate','Construction appetite',0,3,.05,1,x2]]},
+  {name:'Bank',items:[
+    ['capReq','Capital requirement',4,16,.5,8,p1],
+    ['startCap','Starting capital ratio',6,20,.5,11,p1],
+    ['nim','Net interest margin',.5,4,.05,1.8,p2]]},
+];
+const P={};
+const SHOCKS=[
+  ['Tech crash',()=>{S.shock[1]-=28;news('Tech crash: valuations collapse, layoffs at the Downtown campuses','bad')}],
+  ['Factory boom',()=>{S.shock[0]+=16;news('Export orders surge at the Railroad Yards','good')}],
+  ['Tourism collapse',()=>{S.shock[2]-=24;news('Tourists vanish from the Boardwalk','bad')}],
+  ['Rate shock +3%',()=>{S.rateShock+=3;news('Bond market tantrum: rates jump 3 points','bad')}],
+  ['Housing mania',()=>{S.hg+=.025;news('Bidding wars break out across town','good')}],
+  ['Bank loss −40%',()=>{S.bank.capital*=.6;news('Bank writes off 40% of its capital on bad bets','bad')}],
+];
+
+function buildLevers(){
+  const root=$('#levers');
+  const sh=document.createElement('details');sh.className='grp';sh.open=true;
+  sh.innerHTML='<summary>Shocks</summary><div class="shocks"></div><p class="note">Hit the economy with an event and watch it ripple through jobs, rates and mortgages.</p>';
+  const box=sh.querySelector('.shocks');
+  for(const[l,f]of SHOCKS){const b=document.createElement('button');b.textContent=l;b.onclick=()=>{f();refreshAll()};box.appendChild(b)}
+  root.appendChild(sh);
+  for(const g of GROUPS){
+    const d=document.createElement('details');d.className='grp';d.open=!!g.open;
+    const dot=g.ind!=null?`<span class="dot" style="background:${IND[g.ind].color}"></span>`:'';
+    d.innerHTML=`<summary>${dot}${g.name}</summary>`;
+    if(g.toggle){const[id,l,def]=g.toggle;P[id]=def;
+      const t=document.createElement('label');t.className='toggle';t.innerHTML=`<input type="checkbox" id="s-${id}" ${def?'checked':''}> ${l}`;
+      t.querySelector('input').onchange=e=>{P[id]=e.target.checked;syncManual()};d.appendChild(t)}
+    for(const[id,l,min,max,step,def,fmt]of g.items){
+      P[id]=def;
+      const r=document.createElement('div');r.className='row';
+      r.innerHTML=`<label for="s-${id}">${l}</label><output id="o-${id}">${fmt(def)}</output><input type="range" id="s-${id}" min="${min}" max="${max}" step="${step}" value="${def}">`;
+      const inp=r.querySelector('input'),out=r.querySelector('output');
+      inp.oninput=()=>{P[id]=+inp.value;out.textContent=fmt(P[id])};
+      d.appendChild(r);
+    }
+    root.appendChild(d);
+  }
+  const n=document.createElement('p');n.className='note';
+  n.textContent='Houses carry residential mortgages; apartment blocks, shops, hotels, offices and industrial buildings carry commercial mortgages. Credit limits apply to new loans and renewals.';
+  root.appendChild(n);
+  syncManual();
+}
+function syncManual(){const el=$('#s-policyRate');if(el){el.disabled=P.autoPolicy;el.parentElement.style.opacity=P.autoPolicy?.5:1}}
+
+/* ============================== simulation state ============================== */
+const N=32, ROAD=0.8, SPAN=N+(N/4-1)*ROAD, HALF=SPAN/2;
+const cellPos=g=>g+Math.floor(g/4)*ROAD-HALF+.5;
+let S, props=[], hist;
+
+function shares(){const s=[P.share0,P.share1,P.share2];const t=s[0]+s[1]+s[2]||1;return s.map(v=>v/t)}
+function pickInd(){const s=shares();const x=R();return x<s[0]?0:x<s[0]+s[1]?1:2}
+
+function reset(){
+  rng=mulberry32(+$('#seed').value||1);
+  const pol0=P.rNeutral+P.inflTarget;
+  S={t:0,G:[0,0],idio:[[0,0],[0,0],[0,0]],gap:[0,0,0],trend:[1,1,1],shock:[0,0,0],rateShock:0,u:[P.natU,P.natU,P.natU],
+     uTown:P.natU,townGap:0,infl:P.inflTarget,policy:pol0,rate:pol0,rateGapEMA:0,priceLevel:1,popIdx:1,wage:[1,1,1],incomeIdx:1,rentRes:1,
+     HPI:1,hg:.002,HPItrend:1,CRE:[1,1,1],cg:[0,0,0],noiF:[1,1,1],riskPrem:0,stress:0,effLTV:P.maxLTV/100,effLTVc:P.maxLTVc/100,
+     delinqRes:0,delinqCom:0,fireRes:0,fireCom:[0,0,0],bank:{capital:0,loans:0,bailouts:0,bailoutCost:0},phase:'expansion',
+     lastRateLog:pol0,lastHpiFlag:0,lastStress:0};
+  S.resRate=S.rate+P.resSpread; S.comRate=S.rate+P.comSpread;
+  S.uc0=(S.resRate+P.propTax+1.5)/100;
+  S.ucC0=(S.comRate+1)/100;
+  hist={gdp:[],y0:[],y1:[],y2:[],u:[],infl:[],rate:[],resRate:[],comRate:[],hpi:[],cre0:[],cre1:[],cre2:[],dr:[],dc:[],uw:[],cap:[],gap:[],fc:[]};
+  props=[];
+  for(let gz=0;gz<N;gz++)for(let gx=0;gx<N;gx++){
+    const bx=gx>>2,by=gz>>2,hood=hoodOf(bx,by),H=HOODS[hood];
+    const type=pick(H.mix);
+    const p={id:props.length,gx,gz,bx,by,hood,type,tier:H.tier*(1+.06*gauss()),beta:H.beta,idio:Math.exp(.22*gauss()),hvar:.75+.5*R(),
+      cont:0,build:0,reo:0,cash:0,loan:null,owner:'none',ind:0,employed:true,dh:0,num:(bx*8+by)%7*100+((gx&3)+(gz&3)*4+1)*2};
+    p.future=type==='lot'?pick(Object.fromEntries(Object.entries(H.mix).filter(([k])=>k!=='lot'))):type;
+    p.V0=TYPES[type].base*p.tier*p.idio; p.value=p.V0;
+    p.vh=new Float32Array(12).fill(p.V0);
+    setupOwner(p);
+    if(type!=='lot'&&R()<(TYPES[type].cls==='com'?.78:.7)){
+      if(originate(p)&&p.loan){const L=p.loan;L.bal*=.5+.5*R();L.amortLeft=Math.max(60,Math.round(L.amortLeft*(.45+.55*R())));
+        L.pmt=annuity(L.bal,L.rate,L.amortLeft);L.resetIn=1+Math.floor(R()*P.fixedTerm*12);L.maturity=1+Math.floor(R()*P.termC*12)}
+    }
+    props.push(p);
+  }
+  S.bank.loans=props.reduce((s,p)=>s+(p.loan?p.loan.bal:0),0);
+  S.bank.capital=S.bank.loans*P.startCap/100;
+  $('#news').innerHTML='';
+  news('Monopolis opens for business. 1,024 parcels, one bank, and a lot of mortgages.');
+  record();
+  if(scene)rebuildColors(true);
+  refreshAll();
+}
+
+function setupOwner(p){
+  const T=TYPES[p.type];
+  p.cash=0;p.missedBefore=0;
+  if(T.cls==='lot'){p.owner='none';return}
+  if(p.type==='house'&&R()<.8){
+    p.owner='resident';p.ind=pickInd();p.employed=R()>S.u[p.ind]/100;
+    p.incBase=p.V0/(12*(3.8+1.7*R()));            // household income set against the home's original price
+    p.cash=p.incBase*S.wage[p.ind]*(2+6*R());
+  }else if(T.cls==='res'){
+    p.owner='landlord';p.rent0=p.V0*.075/12;p.cash=p.rent0*S.rentRes*(3+6*R());
+  }else{
+    p.owner='business';p.noi0=p.V0*.07/12;p.ind=T.ind;p.cash=p.noi0*S.noiF[T.ind]*(3+6*R());
+  }
+}
+function incomeOf(p){
+  if(p.owner==='resident')return p.incBase*S.wage[p.ind]*(p.employed?1:.35);
+  if(p.owner==='landlord')return p.rent0*S.rentRes;
+  if(p.owner==='business')return p.noi0*S.noiF[TYPES[p.type].ind];
+  return 0;
+}
+function expenseOf(p){
+  let e=p.value*P.propTax/1200;
+  if(p.owner==='resident')e+=p.incBase*S.wage[p.ind]*.5;
+  else if(p.owner==='landlord')e+=p.rent0*S.priceLevel*.25;
+  return e;
+}
+function originate(p){
+  if(R()<(p.type==='house'?.2:.15)){p.loan=null;return true}       // cash buyer
+  const kind=p.type==='house'?'res':'com';
+  const rate=kind==='res'?S.resRate:S.comRate;
+  const n=kind==='res'?P.amortYears*12:300;
+  let bal=p.value*(kind==='res'?S.effLTV:S.effLTVc)*(.8+.2*R());
+  let pmt=annuity(bal,rate,n);
+  const inc=p.owner==='resident'?p.incBase*S.wage[p.ind]:incomeOf(p);
+  const maxP=p.owner==='resident'?inc*P.maxDTI/100:inc/P.minDSCR;
+  if(pmt>maxP){bal*=maxP/pmt;pmt=maxP}
+  if(bal<p.value*.3)return false;                                    // can't borrow enough to close
+  const fixed=kind==='res'?R()>P.varShare/100:R()<.6;
+  p.loan={kind,bal,rate,fixed,n,amortLeft:n,pmt,missed:0,resetIn:P.fixedTerm*12,maturity:P.termC*12,orig:bal};
+  return true;
+}
+function valueOf(p){
+  const T=TYPES[p.type];
+  const idx=T.cls==='com'?S.CRE[T.ind]:Math.pow(S.HPI,p.beta);
+  return T.base*p.tier*p.idio*idx*(1-p.cont);
+}
+function sellTo(p,fromBank){
+  const old={owner:p.owner,ind:p.ind,employed:p.employed,incBase:p.incBase,cash:p.cash,loan:p.loan,rent0:p.rent0,noi0:p.noi0};
+  setupOwner(p);
+  if(!originate(p)){Object.assign(p,old);return false}
+  p.reo=0;
+  return true;
+}
+let monthLoss=0, monthFc={res:0,com:0,big:[]}, monthStarts={}, monthDemol=0;
+function foreclose(p,why){
+  const L=p.loan;const rec=p.value*(1-P.fireSale/100);
+  const loss=Math.max(0,L.bal-rec);monthLoss+=loss;
+  if(p.type==='house')monthFc.res++;else{monthFc.com++;if(p.V0>4000)monthFc.big.push([p,why])}
+  p.loan=null;p.owner='bank';p.reo=0;p.cash=0;
+  const c=.02*P.contagion;
+  for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){
+    const gx=p.gx+dx,gz=p.gz+dz;if(gx<0||gz<0||gx>=N||gz>=N||(!dx&&!dz))continue;
+    const q=props[gz*N+gx];q.cont=Math.min(.3,q.cont+c/(Math.abs(dx)+Math.abs(dz)))}
+  if(TYPES[p.type].cls==='com')S.fireCom[TYPES[p.type].ind]++;else S.fireRes++;
+}
+function startBuild(p){
+  p.type=p.future;const T=TYPES[p.type];
+  p.V0=T.base*p.tier*p.idio;p.value=valueOf(p);p.build=12;p.owner='developer';
+  const cost=T.base*p.tier*S.priceLevel;
+  p.loan={kind:'com',bal:cost*.6,rate:S.comRate,fixed:false,n:300,amortLeft:300,pmt:0,missed:0,resetIn:0,maturity:12,orig:cost*.6};
+  monthStarts[p.type]=(monthStarts[p.type]||0)+1;
+}
+function completeBuild(p){
+  const L=p.loan;
+  setupOwner(p);
+  p.loan=L;if(L){L.pmt=annuity(L.bal,L.rate,L.amortLeft);L.maturity=12}
+  if(p.type==='house'&&L){                      // spec homes get sold to households
+    const keep={...p};if(!sellTo(p,false)){Object.assign(p,keep)}
+  }
+}
+function demolish(p){
+  p.future=p.type;p.type='lot';p.owner='none';p.loan=null;p.reo=0;p.cash=0;
+  p.V0=TYPES.lot.base*p.tier*p.idio;monthDemol++;
+}
+
+/* AR(2) oscillator scaled so its stationary s.d. ≈ target (in % of output) */
+function ar2(st,periodY,target){
+  const rho=P.persistence,w=2*Math.PI/(periodY*12),a1=2*rho*Math.cos(w),a2=-rho*rho;
+  const k=Math.sqrt(Math.max(1,(1-a2)/((1+a2)*((1-a2)**2-a1*a1))));
+  const x=a1*st[0]+a2*st[1]+gauss()*target/k;st[1]=st[0];st[0]=x;return x;
+}
+const yoyOf=(a,n=12)=>a.length>n?(a[a.length-1]/a[a.length-1-n]-1)*100:0;
+
+function stepMonth(){
+  S.t++;
+  const sh=shares();
+  /* ---- industries & macro ---- */
+  const G=ar2(S.G,P.cycleYears,2.2*P.volatility);
+  const periods=[P.cycleYears,P.cycleYears*.7,P.cycleYears*.55],loads=[.9,.7,.6];
+  S.rateGapEMA+=(S.rate-S.infl-P.rNeutral-S.rateGapEMA)/18;
+  const hGap=(S.HPI/S.HPItrend-1)*100;
+  let tg=0,tu=0;
+  for(let k=0;k<3;k++){
+    const idio=ar2(S.idio[k],periods[k],1.4*P.volatility*P['vol'+k]);
+    S.shock[k]*=.94;
+    const g=loads[k]*G+idio-P['rateSens'+k]*S.rateGapEMA+(k===2?P.wealth2*.12:.03)*hGap-5*S.stress+S.shock[k];
+    S.gap[k]=clamp(g,-45,40);
+    S.trend[k]*=1+P['growth'+k]/1200;
+    S.u[k]=clamp(P.natU-.45*S.gap[k]*(k===1?1.15:1),1,40);
+    tg+=sh[k]*S.gap[k];tu+=sh[k]*S.u[k];
+  }
+  S.townGap=tg;S.uTown=tu;
+  S.infl=clamp(S.infl+.04*(P.inflTarget-S.infl)+.025*tg+.04*gauss()*P.volatility,-4,30);
+  S.rateShock*=.96;
+  if(P.autoPolicy){const tgt=P.rNeutral+S.infl+P.hawkish*(.5*(S.infl-P.inflTarget)+.5*tg);S.policy+=.15*(tgt-S.policy)}
+  else S.policy+=.3*(P.policyRate-S.policy);
+  S.policy=clamp(S.policy,.1,25);S.rate=clamp(S.policy+S.rateShock,.1,28);
+  S.priceLevel*=1+S.infl/1200;S.popIdx*=1+P.popGrowth/1200;
+  let inc=0;for(let k=0;k<3;k++){S.wage[k]=S.priceLevel*Math.sqrt(S.trend[k])*(1+.004*S.gap[k]);inc+=sh[k]*S.wage[k]}
+  S.incomeIdx=inc;
+  const vac=clamp(.04+.6*(S.uTown-P.natU)/100,.01,.3);
+  S.rentRes=S.incomeIdx*Math.pow(S.popIdx,.3)*(1-vac)/.96;
+  /* ---- rates ---- */
+  S.riskPrem=.25*S.delinqRes+2.5*S.stress;
+  S.resRate=S.rate+P.resSpread+S.riskPrem;
+  S.comRate=S.rate+P.comSpread+.25*S.delinqCom+3*S.stress;
+  /* ---- house prices ---- */
+  const resCount=props.filter(p=>TYPES[p.type].cls==='res').length||1;
+  const expG=P.speculation*.3*(clamp(yoyOf(hist.hpi),-15,25)-3);
+  const uc=Math.max(.012,(S.resRate+P.propTax+1.5-expG)/100);
+  const credit=Math.pow(S.effLTV/.8,1.2)*Math.pow(P.maxDTI/39,.7)*Math.pow(P.amortYears/25,.35);
+  const F=S.incomeIdx*Math.pow(S.popIdx,.6)*credit*S.uc0/uc;
+  const reoP=.4*(S.fireRes/resCount)*(P.fireSale/25);
+  S.hg=clamp(.5*S.hg+.008*(Math.log(F)-Math.log(S.HPI))-reoP+.003*gauss()*P.volatility,-.045,.045);
+  S.HPI*=Math.exp(S.hg);S.HPItrend+=(S.HPI-S.HPItrend)/120;S.fireRes=0;
+  /* ---- commercial prices ---- */
+  const cnt=[1,1,1];for(const p of props){const T=TYPES[p.type];if(T.cls==='com')cnt[T.ind]++}
+  for(let k=0;k<3;k++){
+    const occ=clamp(.9+.012*S.gap[k],.55,.98);
+    S.noiF[k]=S.priceLevel*Math.sqrt(S.trend[k])*Math.pow(1+S.gap[k]/100,1.5)*occ/.9;
+    const cy=yoyOf(hist['cre'+k]);
+    const ucC=Math.max(.03,(S.comRate+1-P.speculation*.2*(clamp(cy,-15,20)-3))/100);
+    const Fk=S.noiF[k]*S.ucC0/ucC*Math.pow(S.effLTVc/.65,.8);
+    S.cg[k]=clamp(.45*S.cg[k]+.012*(Math.log(Fk)-Math.log(S.CRE[k]))-.5*(S.fireCom[k]/cnt[k])*(P.fireSale/25)+.004*gauss()*P.volatility,-.05,.05);
+    S.CRE[k]*=Math.exp(S.cg[k]);S.fireCom[k]=0;
+  }
+  /* ---- every parcel ---- */
+  monthLoss=0;monthFc={res:0,com:0,big:[]};monthStarts={};monthDemol=0;
+  let refiFail=0;
+  const slot=S.t%12;
+  for(const p of props){
+    p.vh[slot]=p.value;
+    p.cont*=.97;
+    p.value=valueOf(p);
+    const T=TYPES[p.type];
+    if(p.build>0){if(p.loan)p.loan.bal*=1+p.loan.rate/1200;if(--p.build===0)completeBuild(p);continue}
+    if(T.cls==='lot'){
+      const FT=TYPES[p.future];const idx=FT.cls==='com'?S.CRE[FT.ind]:Math.pow(S.HPI,p.beta);
+      const ratio=idx/S.priceLevel;
+      if(ratio>1.05&&S.stress<.6&&R()<.08*P.buildRate*(ratio-1.05))startBuild(p);
+      continue;
+    }
+    if(p.owner==='bank'){
+      p.reo++;
+      if(R()<.14*(S.effLTV/(P.maxLTV/100))*(1-.6*S.stress))sellTo(p,true);
+      else if(p.reo>36&&R()<.04)demolish(p);
+      continue;
+    }
+    if(p.owner==='resident'){
+      const u=S.u[p.ind]/100,find=.22,sep=u*find/(1-u);
+      if(p.employed){if(R()<sep)p.employed=false}else if(R()<find)p.employed=true;
+    }
+    const L=p.loan;
+    if(L){
+      const mkt=L.kind==='res'?S.resRate:S.comRate;
+      if(!L.fixed){L.rate=mkt;L.pmt=annuity(L.bal,L.rate,L.amortLeft)}
+      else if(L.kind==='res'&&--L.resetIn<=0){L.rate=mkt;L.pmt=annuity(L.bal,L.rate,L.amortLeft);L.resetIn=P.fixedTerm*12}
+    }
+    const income=incomeOf(p),exp=expenseOf(p);
+    let avail=p.cash+income-exp;
+    if(L){
+      if(avail>=L.pmt){
+        avail-=L.pmt;const int=L.bal*L.rate/1200;L.bal=Math.max(0,L.bal-(L.pmt-int));L.amortLeft=Math.max(1,L.amortLeft-1);
+        if(L.missed>0&&avail>=2*L.pmt){avail-=L.pmt;L.missed--}
+      }else{L.missed++;L.bal*=1+L.rate/1200}
+      p.cash=Math.max(0,avail);
+      if(L.bal<1){p.loan=null}
+      else if(L.kind==='com'&&L.missed===0&&--L.maturity<=0){
+        const noi=incomeOf(p);
+        const maxNew=Math.min(pvAnnuity(noi/P.minDSCR,S.comRate,300),p.value*S.effLTVc);
+        if(L.bal>maxNew&&p.cash>=L.bal-maxNew){p.cash-=L.bal-maxNew;L.bal=maxNew}
+        if(L.bal<=maxNew){L.rate=S.comRate;L.amortLeft=300;L.pmt=annuity(L.bal,L.rate,300);L.maturity=P.termC*12}
+        else if(p.value*.94>L.bal&&sellTo(p,false)){}
+        else{refiFail++;foreclose(p,'refi');continue}
+      }
+      if(p.loan&&p.loan.missed>=3){
+        if(p.value*.94>p.loan.bal&&sellTo(p,false)){}           // sell with equity intact
+        else{foreclose(p,'default');continue}
+      }
+    }else p.cash=Math.max(0,avail);
+    if(p.owner==='resident')p.cash=Math.min(p.cash,24*p.incBase*S.wage[p.ind]);
+    else p.cash=Math.min(p.cash,24*Math.max(income,1));
+    if(R()<P.turnover/1200&&(!p.loan||p.loan.missed===0))sellTo(p,false);
+  }
+  /* ---- bank ---- */
+  let loans=0,nr=0,nc=0,dr=0,dc=0,uw=0;
+  for(const p of props){const L=p.loan;if(!L||p.build>0){if(L)loans+=L.bal;continue}
+    loans+=L.bal;if(L.kind==='res'){nr++;if(L.missed)dr++}else{nc++;if(L.missed)dc++}if(L.bal>p.value)uw++}
+  const B=S.bank;B.loans=loans;
+  B.capital+=loans*P.nim/1200-monthLoss;
+  let ratio=B.capital/Math.max(loans,1)*100;
+  if(ratio>P.capReq+4){B.capital-=(ratio-P.capReq-4)/100*loans*.05;ratio=B.capital/loans*100}
+  if(ratio<2){const need=loans*P.capReq/100-B.capital;B.bailoutCost+=need;B.bailouts++;B.capital=loans*P.capReq/100;
+    news(`Bank fails its stress test. Town council injects ${money(need)} to keep it open.`,'bad');ratio=P.capReq}
+  S.capRatio=ratio;
+  S.stress=clamp((P.capReq+1.5-ratio)/(P.capReq*.5),0,1);
+  S.effLTV=P.maxLTV/100*(1-.25*S.stress);S.effLTVc=P.maxLTVc/100*(1-.35*S.stress);
+  S.delinqRes=nr?dr/nr*100:0;S.delinqCom=nc?dc/nc*100:0;S.underwater=(nr+nc)?uw/(nr+nc)*100:0;
+  S.fcMonth=monthFc.res+monthFc.com;
+  record();
+  storyteller(refiFail);
+}
+
+function record(){
+  const h=hist,sh=shares();let g=0;
+  for(let k=0;k<3;k++){const y=S.trend[k]*(1+S.gap[k]/100)*100;h['y'+k].push(y);g+=sh[k]*y}
+  h.gdp.push(g);h.u.push(S.uTown);h.infl.push(S.infl);h.rate.push(S.rate);h.resRate.push(S.resRate);h.comRate.push(S.comRate);
+  h.hpi.push(S.HPI*100);for(let k=0;k<3;k++)h['cre'+k].push(S.CRE[k]*100);
+  h.dr.push(S.delinqRes);h.dc.push(S.delinqCom);h.uw.push(S.underwater||0);h.cap.push(S.capRatio??P.startCap);h.gap.push(S.townGap);h.fc.push(S.fcMonth||0);
+  const MAX=1440;for(const k in h)if(h[k].length>MAX)h[k].shift();
+}
+
+/* ============================== news ============================== */
+function news(text,cls=''){
+  const li=document.createElement('li');if(cls)li.className=cls;
+  li.innerHTML=`<time>${dateOf(S?S.t:0)}</time><span></span>`;li.querySelector('span').textContent=text;
+  const ol=$('#news');ol.prepend(li);while(ol.children.length>60)ol.lastChild.remove();
+}
+function addr(p){const H=HOODS[p.hood];return p.num+' '+H.streets[(p.bx+p.by)%H.streets.length]}
+function phaseOf(){
+  const g=S.townGap,d=g-(hist.gap[hist.gap.length-7]??g);
+  if(g>2&&d>=0)return'boom';if(g<-2)return'recession';if(g<0&&d<0)return'slowdown';if(g<0)return'recovery';return'expansion';
+}
+function storyteller(refiFail){
+  const ph=phaseOf();
+  if(ph!==S.phase){
+    const msg={boom:['The town is booming. Help-wanted signs everywhere.','good'],recession:['Recession: the town economy is shrinking.','bad'],
+      slowdown:['Growth stalls. Businesses hold off on hiring.',''],recovery:['Green shoots: the economy is climbing back.','good'],expansion:['Steady expansion.','good']}[ph];
+    if(!(S.phase==='boom'&&ph==='expansion'))news(msg[0],msg[1]);S.phase=ph;
+  }
+  if(Math.abs(S.rate-S.lastRateLog)>=.75){news(`Central bank ${S.rate>S.lastRateLog?'raises':'cuts'} rates to ${S.rate.toFixed(2)}%`,S.rate>S.lastRateLog?'':'good');S.lastRateLog=S.rate}
+  for(const[p,why]of monthFc.big.slice(0,2))news(`${TYPES[p.type].label} at ${addr(p)} ${why==='refi'?'can’t refinance its maturing loan':'defaults'}; the bank takes the keys`,'bad');
+  if(monthFc.res>=3)news(`${monthFc.res} homes foreclosed this month`,'bad');
+  const st=Object.entries(monthStarts);
+  if(st.length){const n=st.reduce((s,[,v])=>s+v,0);if(n>=2||st.some(([k])=>TYPES[k].cls==='com'))news(`Cranes up: ground broken on ${st.map(([k,v])=>v+' '+TYPES[k].label.toLowerCase()+(v>1?'s':'')).join(', ')}`,'good')}
+  if(monthDemol>=1)news(`${monthDemol} abandoned bank-owned building${monthDemol>1?'s':''} demolished`,'bad');
+  const y=yoyOf(hist.hpi);
+  if(y>15&&S.lastHpiFlag!==1){news(`Housing frenzy: home prices up ${y.toFixed(0)}% in a year`,'good');S.lastHpiFlag=1}
+  else if(y<-8&&S.lastHpiFlag!==-1){news(`Home prices sliding: down ${(-y).toFixed(0)}% from a year ago`,'bad');S.lastHpiFlag=-1}
+  else if(Math.abs(y)<4)S.lastHpiFlag=0;
+  if(S.stress>.3&&S.lastStress<=.3)news('Bank capital runs thin. Lending standards tighten.','bad');
+  if(S.stress<.05&&S.lastStress>=.05)news('Bank capital rebuilt. Credit flows again.','good');
+  S.lastStress=S.stress;
+}
+
+/* ============================== ledger: KPIs + charts ============================== */
+const KPIS=[
+  ['GDP, real y/y',()=>{const g=hist.gdp;const n=g.length;const v=n>12?((g[n-1]/g[n-13])/(1)-1)*100:0;return[pct(v),v>1.5?'good':v>-0.5?'warn':'bad']}],
+  ['Unemployment',()=>[pct(S.uTown),S.uTown<P.natU+1?'good':S.uTown<P.natU+3?'warn':'bad']],
+  ['Inflation',()=>[pct(S.infl),Math.abs(S.infl-P.inflTarget)<1?'good':Math.abs(S.infl-P.inflTarget)<2.5?'warn':'bad']],
+  ['Policy rate',()=>[S.rate.toFixed(2)+'%','']],
+  ['Home mortgage rate',()=>[S.resRate.toFixed(2)+'%',S.resRate<6?'good':S.resRate<8?'warn':'bad']],
+  ['Home prices y/y',()=>{const v=yoyOf(hist.hpi);return[pct(v),v>20||v<-5?'bad':v>10||v<0?'warn':'good']}],
+  ['Mortgages in arrears',()=>{const v=(S.delinqRes+S.delinqCom)/2;return[pct(v),v<2?'good':v<5?'warn':'bad']}],
+  ['Bank capital ratio',()=>[pct(S.capRatio??P.startCap),S.stress<.05?'good':S.stress<.4?'warn':'bad']],
+];
+const CHARTS=[
+  {t:'Output by industry',fmt:v=>v.toFixed(0),s:[['gdp','Town','ink'],['y0',IND[0].name,IND[0].color],['y1',IND[1].name,IND[1].color],['y2','Tourism',IND[2].color]]},
+  {t:'Jobs and prices',fmt:v=>v.toFixed(0)+'%',s:[['u','Unemployment','#d6283a'],['infl','Inflation','#7b5cd6']]},
+  {t:'Interest rates',fmt:v=>v.toFixed(0)+'%',zero:true,s:[['rate','Policy','ink'],['resRate','Home mortgage','#2f9e44'],['comRate','Commercial','#e8833a']]},
+  {t:'Property price indices',fmt:v=>v.toFixed(0),log:true,s:[['hpi','Homes','#2f9e44'],['cre1','Offices','#3d8be0'],['cre0','Industrial','#e8833a'],['cre2','Hotels & shops','#c9a227']]},
+  {t:'Mortgage stress',fmt:v=>v.toFixed(0)+'%',zero:true,s:[['dr','Homes in arrears','#d6283a'],['dc','Commercial in arrears','#e8833a'],['uw','Underwater loans','#7b5cd6']]},
+  {t:'Bank capital ratio',fmt:v=>v.toFixed(0)+'%',zero:true,ref:()=>P.capReq,s:[['cap','Capital / loans','#2f9e44']]},
+];
+function buildLedger(){
+  $('#kpis').innerHTML=KPIS.map((k,i)=>`<div class="kpi" id="kpi${i}"><div class="k">${k[0]}</div><div class="v">–</div></div>`).join('');
+  $('#charts').innerHTML='<p class="h2">Last 20 years <span style="text-transform:none;letter-spacing:0;font-weight:400">· shaded = recession</span></p>'+CHARTS.map((c,i)=>`<div class="chart"><div class="top"><span class="t">${c.t}</span><span class="leg">${c.s.map(s=>`<span><i style="background:${s[2]==='ink'?'var(--ink)':s[2]}"></i>${s[1]}</span>`).join('')}</span></div><canvas id="ch${i}"></canvas></div>`).join('<div style="height:10px"></div>');
+}
+function drawCharts(){
+  const ink=css('--ink'),muted=css('--muted'),line=css('--line'),shade=css('--shade'),bad=css('--bad');
+  const W=240;
+  CHARTS.forEach((c,i)=>{
+    const cv=$('#ch'+i),dpr=Math.min(devicePixelRatio||1,2),w=cv.clientWidth,h=cv.clientHeight;if(!w)return;
+    if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr)}
+    const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,w,h);
+    const n=hist.gdp.length,start=Math.max(0,n-W),len=n-start;
+    const tr=v=>c.log?Math.log(Math.max(v,1e-3)):v;
+    let lo=Infinity,hi=-Infinity;
+    for(const s of c.s){const a=hist[s[0]];for(let j=start;j<n;j++){const v=tr(a[j]);if(v<lo)lo=v;if(v>hi)hi=v}}
+    if(c.ref){const r=c.ref();lo=Math.min(lo,r);hi=Math.max(hi,r)}
+    if(c.zero)lo=Math.min(lo,0);
+    if(hi-lo<1e-6){hi+=1;lo-=1}const pad=(hi-lo)*.08;hi+=pad;if(!c.zero)lo-=pad;
+    const L=34,Rr=6,T=6,B=14,pw=w-L-Rr,ph=h-T-B;
+    const X=j=>L+(len<=1?pw:(j-start)/(W-1)*pw),Y=v=>T+ph-(tr(v)-lo)/(hi-lo)*ph;
+    const Yt=v=>T+ph-(v-lo)/(hi-lo)*ph;
+    // recessions
+    x.fillStyle=shade;
+    for(let j=start;j<n;j++)if(hist.gap[j]<-2){x.fillRect(X(j),T,Math.max(1,pw/(W-1))+.5,ph)}
+    // grid
+    x.strokeStyle=line;x.lineWidth=1;x.fillStyle=muted;x.font='10px '+css('--f-data');x.textAlign='right';x.textBaseline='middle';
+    for(let g=0;g<=2;g++){const v=lo+(hi-lo)*(g/2);const y=Yt(v);x.beginPath();x.moveTo(L,y+.5);x.lineTo(w-Rr,y+.5);x.stroke();
+      x.fillText(c.fmt(c.log?Math.exp(v):v),L-4,y)}
+    // year ticks
+    x.textAlign='center';x.textBaseline='alphabetic';
+    for(let j=start;j<n;j++)if(j%60===0){x.fillText(String(2000+j/12),X(j),h-2)}
+    if(c.ref){x.setLineDash([3,3]);x.strokeStyle=bad;const y=Yt(c.ref());x.beginPath();x.moveTo(L,y);x.lineTo(w-Rr,y);x.stroke();x.setLineDash([])}
+    for(const s of c.s){
+      const a=hist[s[0]],col=s[2]==='ink'?ink:s[2];
+      x.strokeStyle=col;x.lineWidth=s[2]==='ink'?2:1.5;x.lineJoin='round';x.beginPath();
+      for(let j=start;j<n;j++){const px=X(j),py=Y(a[j]);j===start?x.moveTo(px,py):x.lineTo(px,py)}x.stroke();
+      x.fillStyle=col;x.beginPath();x.arc(X(n-1),Y(a[n-1]),2.6,0,7);x.fill();
+    }
+  });
+}
+function refreshAll(){
+  KPIS.forEach((k,i)=>{const[v,cls]=k[1]();const el=$('#kpi'+i);el.className='kpi '+cls;el.querySelector('.v').textContent=v});
+  $('#clock').textContent=dateOf(S.t);
+  const ph=$('#phase');ph.className='pill '+S.phase;ph.textContent=S.phase;
+  drawCharts();
+  if(scene)rebuildColors();
+  updateTip();
+}
+
+/* ============================== 3D town ============================== */
+let scene,camera,renderer,controls,bMesh,rMesh,hoverBox,blockPads=[],ground,sea,sand;
+const dummy=new THREE.Object3D(),col=new THREE.Color(),colB=new THREE.Color();
+const STATUS={free:['Owned outright','#8fa3b0'],ok:['Current','#2f9e44'],stress:['Stretched','#e0b000'],delinq:['In arrears','#f06d1e'],reo:['Bank-owned','#d6283a'],build:['Under construction','#c99a2e'],lot:['Vacant','#b49f72']};
+function statusOf(p){
+  if(p.build>0)return'build';if(p.type==='lot')return'lot';if(p.owner==='bank')return'reo';
+  const L=p.loan;if(!L)return'free';if(L.missed>0)return'delinq';
+  const inc=incomeOf(p);
+  if(L.kind==='res'&&p.owner==='resident'?(L.pmt>inc*.45||!p.employed):(inc/Math.max(L.pmt,1e-6)<1.1))return'stress';
+  if(p.cash<L.pmt)return'stress';
+  return'ok';
+}
+function initScene(){
+  const cv=$('#scene');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(38,1,.1,600);camera.position.set(30,34,40);
+  controls=new THREE.OrbitControls(camera,cv);controls.enableDamping=true;controls.maxPolarAngle=1.42;controls.minDistance=8;controls.maxDistance=140;controls.target.set(0,0,2);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x556655,.62));
+  const sun=new THREE.DirectionalLight(0xfff4e0,.95);sun.position.set(28,46,18);sun.castShadow=true;
+  Object.assign(sun.shadow.camera,{left:-32,right:32,top:32,bottom:-32,near:1,far:140});sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0005;
+  scene.add(sun);
+  ground=new THREE.Mesh(new THREE.BoxGeometry(SPAN+6,.2,SPAN+4),new THREE.MeshStandardMaterial({roughness:1}));
+  ground.position.set(0,-.1,-1);ground.receiveShadow=true;scene.add(ground);
+  sand=new THREE.Mesh(new THREE.BoxGeometry(SPAN+6,.16,2.2),new THREE.MeshStandardMaterial({roughness:1}));sand.position.set(0,-.1,HALF+2.1);sand.receiveShadow=true;scene.add(sand);
+  sea=new THREE.Mesh(new THREE.BoxGeometry(SPAN+60,.1,40),new THREE.MeshStandardMaterial({roughness:.35,metalness:.1}));sea.position.set(0,-.18,HALF+23.2);scene.add(sea);
+  // neighbourhood pads with a Monopoly title-deed colour band on the north edge
+  const padG=new THREE.BoxGeometry(4,.06,4),bandG=new THREE.BoxGeometry(4,.09,.32);
+  for(let by=0;by<8;by++)for(let bx=0;bx<8;bx++){
+    const H=HOODS[hoodOf(bx,by)];const cx=cellPos(bx*4)+1.5,cz=cellPos(by*4)+1.5;
+    const pad=new THREE.Mesh(padG,new THREE.MeshStandardMaterial({roughness:1}));pad.position.set(cx,.03,cz);pad.receiveShadow=true;pad.userData.hood=H;scene.add(pad);blockPads.push(pad);
+    const band=new THREE.Mesh(bandG,new THREE.MeshStandardMaterial({color:H.color,roughness:.8}));band.position.set(cx,.05,cz-2+.16);band.receiveShadow=true;scene.add(band);
+  }
+  const boxG=new THREE.BoxGeometry(1,1,1);boxG.translate(0,.5,0);
+  bMesh=new THREE.InstancedMesh(boxG,new THREE.MeshStandardMaterial({roughness:.62,metalness:.05}),N*N);
+  bMesh.castShadow=true;bMesh.receiveShadow=true;bMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  const roofG=new THREE.ConeGeometry(.5,1,4);roofG.rotateY(Math.PI/4);roofG.translate(0,.5,0);
+  rMesh=new THREE.InstancedMesh(roofG,new THREE.MeshStandardMaterial({roughness:.8}),N*N);
+  rMesh.castShadow=true;rMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  for(let i=0;i<N*N;i++){bMesh.setColorAt(i,col.set('#888'));rMesh.setColorAt(i,col)}
+  scene.add(bMesh,rMesh);
+  hoverBox=new THREE.LineSegments(new THREE.EdgesGeometry(boxG),new THREE.LineBasicMaterial({color:0xffffff}));hoverBox.visible=false;scene.add(hoverBox);
+  applyTheme();
+  new ResizeObserver(resize).observe($('#map'));resize();
+  setupPicking();
+}
+function applyTheme(){
+  if(!scene)return;
+  scene.background=new THREE.Color(css('--scene'));
+  ground.material.color.set(css('--road'));sea.material.color.set(css('--sea'));sand.material.color.set(css('--sand'));
+  const gnd=new THREE.Color(css('--ground'));
+  for(const pad of blockPads)pad.material.color.copy(gnd).lerp(new THREE.Color(pad.userData.hood.color),.14);
+  hoverBox.material.color.set(css('--ink'));
+  drawCharts();
+}
+function resize(){const m=$('#map');const w=m.clientWidth,h=m.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+function targetHeight(p){
+  const T=TYPES[p.type];
+  if(T.cls==='lot')return T.h;
+  let hgt=T.h*(p.type==='office'||p.type==='apartment'||p.type==='hotel'?p.hvar:1);
+  const real=p.value/(p.V0*S.priceLevel);
+  hgt*=clamp(Math.pow(real,.3),.6,1.8);
+  if(p.build>0)hgt*=Math.max(.08,1-p.build/12);
+  return hgt;
+}
+const CHG_LO=new THREE.Color('#d6283a'),CHG_MID=new THREE.Color('#d9d4c7'),CHG_HI=new THREE.Color('#2f9e44');
+const LTV_A=new THREE.Color('#2f9e44'),LTV_B=new THREE.Color('#e0b000'),LTV_C=new THREE.Color('#d6283a');
+function colorFor(p,out){
+  const mode=$('#mode').value,T=TYPES[p.type];
+  if(mode==='type'){out.set(p.build>0?STATUS.build[1]:T.color);if(p.owner==='bank')out.lerp(colB.set('#444'),.45);return}
+  if(mode==='status'){out.set(STATUS[statusOf(p)][1]);return}
+  if(mode==='hood'){out.set(HOODS[p.hood].color);return}
+  if(mode==='ind'){
+    if(p.owner==='resident'){out.set(IND[p.ind].color);if(!p.employed)out.lerp(colB.set('#333'),.6)}
+    else if(T.ind!=null)out.set(IND[T.ind].color);else out.set('#a8aaa4');return}
+  if(mode==='ltv'){
+    if(!p.loan||p.build>0){out.set(p.owner==='bank'?'#6d2b30':'#9aa6ad');return}
+    const v=p.loan.bal/Math.max(p.value,1);
+    if(v<.7)out.copy(LTV_A).lerp(LTV_B,clamp(v/.7,0,1)**2);else out.copy(LTV_B).lerp(LTV_C,clamp((v-.7)/.4,0,1));return}
+  if(mode==='chg'){
+    const old=p.vh[(S.t+1)%12]||p.value;const c=p.value/old-1;
+    if(c<0)out.copy(CHG_MID).lerp(CHG_LO,clamp(-c/.2,0,1));else out.copy(CHG_MID).lerp(CHG_HI,clamp(c/.2,0,1));return}
+}
+let lastMode='';
+function rebuildColors(force){
+  for(const p of props){colorFor(p,col);bMesh.setColorAt(p.id,col);col.multiplyScalar(.72);rMesh.setColorAt(p.id,col)}
+  bMesh.instanceColor.needsUpdate=true;rMesh.instanceColor.needsUpdate=true;
+  const m=$('#mode').value;if(m!==lastMode||force){lastMode=m;drawLegend()}
+}
+function drawLegend(){
+  const m=$('#mode').value,el=$('#legend');
+  const sw=(c,l)=>`<div class="lg"><span class="dot" style="background:${c}"></span>${l}</div>`;
+  if(m==='type')el.innerHTML=Object.values(TYPES).map(t=>sw(t.color,t.label)).join('')+sw('#7a5a3a','Darker = bank-owned');
+  else if(m==='status')el.innerHTML=Object.values(STATUS).map(s=>sw(s[1],s[0])).join('');
+  else if(m==='hood')el.innerHTML=Object.values(HOODS).map(h=>sw(h.color,h.name)).join('');
+  else if(m==='ind')el.innerHTML=IND.map(i=>sw(i.color,i.name+' workers & sites')).join('')+sw('#3a3a3a','Darker = laid off')+sw('#a8aaa4','Rental housing');
+  else if(m==='ltv')el.innerHTML='<div>Loan ÷ current value</div><div class="grad" style="background:linear-gradient(90deg,#2f9e44,#e0b000 63%,#d6283a)"></div><div class="gl"><span>0%</span><span>70%</span><span>110%+</span></div>'+sw('#9aa6ad','No mortgage');
+  else el.innerHTML='<div>Value vs 12 months ago</div><div class="grad" style="background:linear-gradient(90deg,#d6283a,#d9d4c7,#2f9e44)"></div><div class="gl"><span>−20%</span><span>0</span><span>+20%</span></div>';
+}
+function updateMatrices(){
+  const z=new THREE.Vector3(0,0,0);
+  for(const p of props){
+    const T=TYPES[p.type],th=targetHeight(p);p.dh+=(th-p.dh)*.12;
+    const x=cellPos(p.gx),zz=cellPos(p.gz);
+    dummy.position.set(x,.06,zz);dummy.rotation.set(0,0,0);
+    dummy.scale.set(T.fp[0],Math.max(.02,p.dh),T.fp[1]);dummy.updateMatrix();bMesh.setMatrixAt(p.id,dummy.matrix);
+    if(T.roof&&p.build===0){dummy.position.y=.06+p.dh;dummy.scale.set(T.fp[0]*1.5,p.dh*.6,T.fp[1]*1.5)}else dummy.scale.copy(z);
+    dummy.updateMatrix();rMesh.setMatrixAt(p.id,dummy.matrix);
+  }
+  bMesh.instanceMatrix.needsUpdate=true;rMesh.instanceMatrix.needsUpdate=true;
+  const sel=props[pinned??hovered];
+  if(sel){const T=TYPES[sel.type];hoverBox.visible=true;hoverBox.position.set(cellPos(sel.gx),.06,cellPos(sel.gz));hoverBox.scale.set(T.fp[0]+.06,Math.max(.05,sel.dh)+(T.roof?sel.dh*.6:0)+.04,T.fp[1]+.06)}
+  else hoverBox.visible=false;
+}
+
+/* ---- picking & tooltip ---- */
+let hovered=null,pinned=null,mouse={x:0,y:0},downAt=null;
+function setupPicking(){
+  const cv=$('#scene'),ray=new THREE.Raycaster(),v=new THREE.Vector2();
+  const hit=e=>{const r=cv.getBoundingClientRect();v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(v,camera);
+    const h=ray.intersectObjects([bMesh,rMesh],false)[0];return h?h.instanceId:null};
+  cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();mouse={x:e.clientX-r.left,y:e.clientY-r.top};hovered=hit(e);updateTip()});
+  cv.addEventListener('pointerleave',()=>{hovered=null;updateTip()});
+  cv.addEventListener('pointerdown',e=>downAt=[e.clientX,e.clientY]);
+  cv.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>4)return;const id=hit(e);pinned=(id===pinned)?null:id;updateTip()});
+}
+function updateTip(){
+  const tip=$('#tip'),id=pinned??hovered;
+  if(id==null||!S){tip.hidden=true;return}
+  const p=props[id],T=TYPES[p.type],H=HOODS[p.hood],st=statusOf(p),L=p.loan;
+  const old=p.vh[(S.t+1)%12]||p.value;
+  const owner={resident:'Owner-occupier',landlord:'Landlord',business:'Business owner',bank:'Bank (foreclosed)',developer:'Developer',none:'Unowned'}[p.owner];
+  const rows=[['Owner',owner],['Value',money(p.value)],['12-mo change',pct((p.value/old-1)*100)]];
+  if(p.owner==='resident')rows.push(['Household job',IND[p.ind].name+(p.employed?'':' · laid off')],['Income',money(incomeOf(p)*12)+'/yr']);
+  else if(p.owner==='landlord'||p.owner==='business')rows.push(['Net operating income',money(incomeOf(p)*12)+'/yr']);
+  if(L){
+    rows.push(['Mortgage',(L.kind==='res'?'Residential':'Commercial')+' · '+(p.build>0?'construction':L.fixed?'fixed':'variable')],['Rate',L.rate.toFixed(2)+'%'],['Balance',money(L.bal)],['Loan-to-value',(L.bal/p.value*100).toFixed(0)+'%'],['Payment',money(L.pmt*12)+'/yr']);
+    const inc=incomeOf(p);
+    if(p.owner==='resident')rows.push(['Payment / income',(L.pmt/Math.max(inc,1e-6)*100).toFixed(0)+'%']);
+    else if(p.build===0)rows.push(['Debt-service coverage',(inc/Math.max(L.pmt,1e-6)).toFixed(2)+'×']);
+    if(L.kind==='res'&&L.fixed)rows.push(['Renews in',Math.ceil(L.resetIn/12)+' yr']);
+    if(L.kind==='com'&&p.build===0)rows.push(['Balloon due in',(L.maturity/12).toFixed(1)+' yr']);
+    if(L.missed)rows.push(['Missed payments',String(L.missed)]);
+  }
+  if(p.owner!=='bank'&&p.owner!=='none')rows.push(['Cash reserves',money(p.cash)]);
+  if(p.owner==='bank')rows.push(['Months on the market',String(p.reo)]);
+  if(p.cont>.02)rows.push(['Foreclosure drag',pct(-p.cont*100,0)]);
+  tip.innerHTML=`<div class="band" style="background:${H.color}">${T.label}<small>${addr(p)} · ${H.name}</small></div>
+    <dl><dt>Status</dt><dd><span class="st" style="background:${STATUS[st][1]}">${STATUS[st][0]}</span></dd>${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('')}</dl>
+    ${pinned!=null?'<div class="pinned">Pinned · click it again to release</div>':''}`;
+  tip.hidden=false;
+  const m=$('#map'),tw=tip.offsetWidth,th=tip.offsetHeight;
+  let x=mouse.x+16,y=mouse.y+16;if(x+tw>m.clientWidth-8)x=mouse.x-tw-16;if(y+th>m.clientHeight-8)y=Math.max(8,m.clientHeight-th-8);
+  tip.style.left=Math.max(8,x)+'px';tip.style.top=y+'px';
+}
+
+/* ============================== loop & controls ============================== */
+let running=true,acc=0,last=performance.now(),lastUi=0;
+function frame(now){
+  const dt=Math.min(.25,(now-last)/1000);last=now;
+  if(running){acc+=dt*+$('#speed').value;let n=0;while(acc>=1&&n<12){stepMonth();acc-=1;n++}if(acc>12)acc=0;
+    if(n&&now-lastUi>90){refreshAll();lastUi=now}}
+  controls.update();updateMatrices();renderer.render(scene,camera);
+  requestAnimationFrame(frame);
+}
+$('#play').onclick=()=>{running=!running;$('#play').textContent=running?'Pause':'Play'};
+$('#step').onclick=()=>{stepMonth();refreshAll()};
+$('#reset').onclick=()=>{pinned=null;reset()};
+$('#reseed').onclick=()=>{$('#seed').value=Math.floor(Math.random()*99999);pinned=null;reset()};
+$('#mode').onchange=()=>rebuildColors(true);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+window.addEventListener('resize',drawCharts);
+
+buildLevers();buildLedger();
+S=null;reset();
+initScene();rebuildColors(true);
+for(const p of props)p.dh=targetHeight(p);
+requestAnimationFrame(frame);
+</script>
